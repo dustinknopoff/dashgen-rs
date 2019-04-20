@@ -1,0 +1,16 @@
+[package]
+name = "dashgen-rs"
+version = "0.1.0"
+authors = ["Dustin Knopoff <dustinknopoff@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tempdir = "0.3"
+reqwest = {version = "0.9", default-features = false }
+clap = { version = "2.33", features=["yaml"]}
+select = { version = "0.4", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.5"
+glob = "0.3"
+rusqlite = "0.17.0"
