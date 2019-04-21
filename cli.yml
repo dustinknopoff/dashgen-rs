@@ -1,34 +1,22 @@
 about: 'Generate ".docset"s for local and crates.io packages'
-name: dgr
+name: cargo-dashgen
 version: "0.0.1"
 args:
   - color:
       help: "toggles color"
       long: color
       short: c
-  - INPUT:
+  - dir:
       help: "Path of local package or crates.io name"
-      index: 1
-      required: true
-  - OUTPUT:
+      short: d
+      long: dir
+      takes_value: true
+  - out:
       help: "Path to output"
-      index: 2
-      required: true
-  - name:
-      help: "name of docset"
-      index: 3
-      required: true
+      short: o
+      long: out
+      takes_value: true
   - remote:
       help: "flag for <INPUT> to specify is crates.io"
       long: remote
       short: r
-  - compiler:
-      help: "version of compiler to use"
-      short: k
-      long: compiler
-      takes_value: true
-  - features:
-      short: f
-      long: features
-      help: "feature flags to add"
-      takes_value: true

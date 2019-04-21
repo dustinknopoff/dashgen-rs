@@ -1,5 +1,5 @@
 [package]
-name = "dashgen-rs"
+name = "cargo-dashgen"
 version = "0.1.0"
 authors = ["Dustin Knopoff <dustinknopoff@gmail.com>"]
 edition = "2018"
@@ -13,4 +13,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.5"
 glob = "0.3"
-rusqlite = "0.17.0"
+rusqlite = "0.17"
+cargo_metadata = "0.7"
+rayon = "1.0"
+cargo_toml = "0.6"
