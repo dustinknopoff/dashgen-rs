@@ -1,11 +1,10 @@
 use std::{fs::{create_dir_all, File}, process};
 use std::fmt::{Display, Error, Formatter};
-use std::fs::read;
 use std::path::{Path, PathBuf};
 
 use cargo_metadata::Metadata;
-use cargo_toml::Manifest;
 use clap::{App, load_yaml};
+use fs_extra::{copy_items, dir};
 use rayon::prelude::*;
 use rusqlite::{Connection, NO_PARAMS, ToSql};
 use select::document::Document;
@@ -18,23 +17,24 @@ fn main() {
                                          .map(|s| s.to_string()),
                                      matches.value_of("out")
                                          .map(|s| s.to_string()));
-//    let all_docs = builder
-//        .create_skeleton()
-//        .create_plist()
-//        .get_all();
-//    let conn = builder.touch_db();
-//    let all_entries: Vec<Entry> = all_docs.par_iter().flat_map(|page| {
-//        use self::RustType::*;
-//        let mut entries: Vec<Entry> = Vec::new();
-//        vec![Struct, Enum, Macro, Typedef, Constant].iter().for_each(|kind| {
-//            let mut extracted_entry = extract_entries(page, kind);
-//            entries.append(&mut extracted_entry);
-//        });
-//        entries
-//    }).collect();
-//    all_entries.iter().for_each(|entry| {
-//        insert_entry(entry, &conn);
-//    });
+    let all_docs = builder
+        .create_skeleton()
+        .create_plist()
+        .copy_all()
+        .get_all();
+    let conn = builder.touch_db();
+    let all_entries: Vec<Entry> = all_docs.par_iter().flat_map(|page| {
+        use self::RustType::*;
+        let mut entries: Vec<Entry> = Vec::new();
+        vec![Struct, Enum, Macro, Typedef, Constant, Trait].iter().for_each(|kind| {
+            let mut extracted_entry = extract_entries(page, kind);
+            entries.append(&mut extracted_entry);
+        });
+        entries
+    }).collect();
+    all_entries.iter().for_each(|entry| {
+        insert_entry(entry, &conn);
+    });
 }
 
 #[derive(Debug)]
@@ -60,6 +60,7 @@ enum RustType {
     Macro,
     Typedef,
     Constant,
+    Trait,
 }
 
 impl Display for RustType {
@@ -71,6 +72,7 @@ impl Display for RustType {
             Macro => write!(f, "macros"),
             Typedef => write!(f, "types"),
             Constant => write!(f, "constants"),
+            Trait => write!(f, "traits"),
         }
     }
 }
@@ -84,20 +86,17 @@ impl DocsetBuilder {
             .clone()
             .map_or_else(|| determine_dir(false), |dir| PathBuf::from(dir));
         let out = clean_canonical(out);
-        let src = clean_canonical(src);
-        let name = match metadata_run(None) {
-            Ok(manifest) => {
-                let package_name = &manifest.packages[0].name;
+        let name = match get_name() {
+            Ok(package_name) => {
                 package_name.replace("-", "_")
             }
             Err(_) => {
                 panic!("Could not find a Cargo.toml.");
-                ::std::process::exit(1);
             }
         };
-        let mut root_docset = PathBuf::from(out);
+        let mut root_docset = PathBuf::from(src);
         root_docset.push(format!("{}.docset", name));
-        let mut src = PathBuf::from(src);
+        let src = PathBuf::from(out);
         let mut dsb = DocsetBuilder {
             name,
             source: src,
@@ -137,6 +136,7 @@ impl DocsetBuilder {
         <string>https://docs.rs/{}</string>
         <key>dashIndexFilePath</key>
         <string>{}/index.html</string>
+        <key>isJavaScriptEnabled</key><true/>
         </dict>
         </plist>"#, self.name.to_lowercase(), self.name, self.name.to_lowercase(), self.name, self.name.to_lowercase());
         let info_plist_path = self.contents_path.join("info.plist");
@@ -155,7 +155,8 @@ impl DocsetBuilder {
     fn get_all(&self) -> Vec<String> {
         use glob::glob;
         let mut result = Vec::new();
-        let dir = self.source.as_path();
+        let dir = self.source.as_path().parent().unwrap();
+        dbg!(&dir);
         for entry in glob(&format!("{}/*/all.html",
                                    dir.to_str().unwrap())).expect("Failed to read glob pattern") {
             match entry {
@@ -165,6 +166,17 @@ impl DocsetBuilder {
         }
         result
     }
+
+    fn copy_all(&self) -> &Self {
+        use walkdir::WalkDir;
+        let mut options = dir::CopyOptions::new();
+        options.skip_exist = true;
+        let files: Vec<_> = WalkDir::new(self.source.clone().parent().unwrap())
+            .into_iter()
+            .map(|file| file.unwrap().into_path()).collect();
+        copy_items(&files, self.documents_path.clone(), &options).unwrap();
+        self
+    }
 }
 
 fn setup_table(conn: &Connection) {
@@ -172,11 +184,6 @@ fn setup_table(conn: &Connection) {
     id INTEGER PRIMARY KEY, name TEXT, type TEXT, path TEXT\
     );", NO_PARAMS).unwrap();
     conn.execute("CREATE UNIQUE INDEX anchor ON searchIndex (name, type, path);", NO_PARAMS).unwrap();
-}
-
-fn has_docs(path: &Path) -> bool {
-    let doc_path = path.join("target/doc");
-    doc_path.is_dir()
 }
 
 fn extract_entries(path: &String, rust_type: &RustType) -> Vec<Entry> {
@@ -220,13 +227,8 @@ pub fn metadata_run(additional_args: Option<String>) -> Result<Metadata, ()> {
 }
 
 fn determine_dir(is_input: bool) -> PathBuf {
-    match metadata_run(None) {
-        Ok(manifest) => {
-            let mut root = &manifest.workspace_root;
-            root.push("Cargo.toml");
-            let manifest = Manifest::from_slice(&read(root).unwrap()).unwrap();
-            let package = manifest.package.as_ref().unwrap();
-            let package_name = package.name;
+    match get_name() {
+        Ok(package_name) => {
             let package_name = package_name.replace("-", "_");
             if is_input {
                 Path::new("target").join("doc").join(package_name)
@@ -236,7 +238,6 @@ fn determine_dir(is_input: bool) -> PathBuf {
         }
         Err(_) => {
             panic!("Could not find a Cargo.toml.");
-            ::std::process::exit(1);
         }
     }
 }
@@ -251,4 +252,18 @@ fn clean_canonical(path: PathBuf) -> PathBuf {
             process::exit(1);
         }
     }
+}
+
+fn get_name() -> Result<String, ()> {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| String::from("cargo"));
+    let mut cmd = std::process::Command::new(cargo);
+    cmd.arg("pkgid");
+
+    let output = cmd.output().unwrap();
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    let split_forward_slash: Vec<_> = stdout.split("/").collect();
+    let split_hash: Vec<_> = split_forward_slash.last().unwrap().split("#").collect();
+    let name: Vec<_> = split_hash.last().unwrap().split(":").collect();
+    let name: &str = name.iter().next().unwrap();
+    Ok(name.to_string())
 }
