@@ -30,6 +30,7 @@ pub enum RustType {
     Constant,
     Trait,
     Function,
+    Union,
 }
 
 impl Display for RustType {
@@ -43,6 +44,7 @@ impl Display for RustType {
             Constant => write!(f, "constants"),
             Trait => write!(f, "traits"),
             Function => write!(f, "functions"),
+            Union => write!(f, "unions"),
         }
     }
 }

@@ -144,7 +144,13 @@ impl DocsetBuilder {
         use walkdir::WalkDir;
         let mut options = dir::CopyOptions::new();
         options.skip_exist = true;
-        let files: Vec<_> = WalkDir::new(self.source.clone())
+        let src = self.source.clone();
+        let src = if src.ends_with("doc") {
+            src.as_path()
+        } else {
+            src.parent().expect("Could not extract parent from path.")
+        };
+        let files: Vec<_> = WalkDir::new(src)
             .into_iter()
             .map(|file| file.expect("Could not extract file from docs directory.").into_path()).collect();
         match copy_items(&files, self.documents_path.clone(), &options) {
