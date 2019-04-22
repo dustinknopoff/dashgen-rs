@@ -3,6 +3,7 @@ use std::{fmt::{Display, Error, Formatter}, fs::File};
 use rusqlite::{Connection, ToSql};
 use select::document::Document;
 use select::predicate::{Class, Name, Predicate};
+use strum_macros::EnumIter;
 
 #[derive(Debug)]
 pub struct Entry {
@@ -20,7 +21,7 @@ impl Entry {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumIter)]
 pub enum RustType {
     Struct,
     Enum,
@@ -28,6 +29,7 @@ pub enum RustType {
     Typedef,
     Constant,
     Trait,
+    Function,
 }
 
 impl Display for RustType {
@@ -40,6 +42,7 @@ impl Display for RustType {
             Typedef => write!(f, "types"),
             Constant => write!(f, "constants"),
             Trait => write!(f, "traits"),
+            Function => write!(f, "functions"),
         }
     }
 }

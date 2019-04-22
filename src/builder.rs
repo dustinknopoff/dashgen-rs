@@ -16,7 +16,7 @@ pub struct DocsetBuilder {
 }
 
 impl DocsetBuilder {
-    pub fn new(root: Option<String>, src: Option<String>) -> Self {
+    pub fn new(root: Option<String>, src: Option<String>, name: Option<String>) -> Self {
         let out = root
             .clone()
             .map_or_else(|| Self::determine_dir(true),
@@ -26,13 +26,23 @@ impl DocsetBuilder {
             .map_or_else(|| Self::determine_dir(false),
                          |dir| PathBuf::from(dir));
         let out = Self::clean_canonical(out);
-        let name = match Self::get_name() {
-            Ok(package_name) => {
-                package_name.replace("-", "_")
+        let name = if name.is_none() {
+            match Self::get_name() {
+                Ok(ref package_name) if !package_name.is_empty() => {
+                    package_name.replace("-", "_")
+                }
+                Ok(_) => {
+                    println!("Package name could not be found. Perhaps you are using a \
+                virtual workspace. See README for failure explanation.");
+                    println!("You can add the --name argument to avoid this error.");
+                    process::exit(1);
+                }
+                Err(_) => {
+                    panic!("Could not find a Cargo.toml.");
+                }
             }
-            Err(_) => {
-                panic!("Could not find a Cargo.toml.");
-            }
+        } else {
+            name.unwrap()
         };
         let mut root_docset = PathBuf::from(src);
         root_docset.push(format!("{}.docset", name));
@@ -49,8 +59,8 @@ impl DocsetBuilder {
         dsb
     }
 
-    pub fn build(root: Option<String>, src: Option<String>) {
-        let builder = DocsetBuilder::new(root, src);
+    pub fn build(root: Option<String>, src: Option<String>, name: Option<String>) {
+        let builder = DocsetBuilder::new(root, src, name);
         let all_docs = builder
             .create_skeleton()
             .create_plist()
@@ -58,10 +68,11 @@ impl DocsetBuilder {
             .get_all();
         let conn = builder.touch_db();
         let all_entries: Vec<Entry> = all_docs.par_iter().flat_map(|page| {
-            use crate::entry::RustType::*;
+            use crate::entry::RustType;
+            use strum::IntoEnumIterator;
             let mut entries: Vec<Entry> = Vec::new();
-            vec![Struct, Enum, Macro, Typedef, Constant, Trait].iter().for_each(|kind| {
-                let mut extracted_entry = extract_entries(page, kind);
+            RustType::iter().for_each(|kind| {
+                let mut extracted_entry = extract_entries(page, &kind);
                 entries.append(&mut extracted_entry);
             });
             entries
@@ -122,7 +133,7 @@ impl DocsetBuilder {
         for entry in glob(&format!("{}/*/all.html",
                                    dir.to_str().expect("Could not parse documentation path."))).expect("Failed to read glob pattern") {
             match entry {
-                Ok(path) => result.push(path.to_owned().to_str().unwrap().to_string()),
+                Ok(path) => result.push(path.to_owned().to_str().expect("Could not convert path to string.").to_string()),
                 Err(_) => ()
             }
         }
@@ -133,10 +144,16 @@ impl DocsetBuilder {
         use walkdir::WalkDir;
         let mut options = dir::CopyOptions::new();
         options.skip_exist = true;
-        let files: Vec<_> = WalkDir::new(self.source.clone().parent().expect("Could not extract documentation path."))
+        let files: Vec<_> = WalkDir::new(self.source.clone())
             .into_iter()
             .map(|file| file.expect("Could not extract file from docs directory.").into_path()).collect();
-        copy_items(&files, self.documents_path.clone(), &options).expect("Could not copy documentation to docset.");
+        match copy_items(&files, self.documents_path.clone(), &options) {
+            Ok(_) => (),
+            Err(_) => {
+                eprintln!("documentation could not be copied to {:?}.", self.documents_path);
+                eprintln!("You will need to copy them manually for a valid docset.");
+            }
+        }
         self
     }
 

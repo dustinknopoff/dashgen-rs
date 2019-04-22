@@ -16,6 +16,11 @@ args:
       short: o
       long: out
       takes_value: true
+  - name:
+      help: "Override crate name/for crates with virtual workspaces"
+      short: n
+      long: name
+      takes_value: true
   - remote:
       help: "flag for <INPUT> to specify is crates.io"
       long: remote

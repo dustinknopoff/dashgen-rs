@@ -11,5 +11,7 @@ fn main() {
     DocsetBuilder::build(matches.value_of("dir")
                              .map(|s| s.to_string()),
                          matches.value_of("out")
+                             .map(|s| s.to_string()),
+                         matches.value_of("name")
                              .map(|s| s.to_string()));
 }
