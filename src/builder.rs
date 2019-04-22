@@ -1,4 +1,4 @@
-use std::{error::Error, fs::{create_dir_all, File}, path::{Path, PathBuf}, process};
+use std::{fs::{create_dir_all, File}, path::{Path, PathBuf}, process};
 
 use fs_extra::{copy_items, dir};
 use rayon::prelude::*;
@@ -71,7 +71,7 @@ impl DocsetBuilder {
         });
     }
 
-    pub fn create_skeleton(&self) -> &Self {
+    fn create_skeleton(&self) -> &Self {
         let path = self.documents_path.as_path();
         match create_dir_all(path) {
             Ok(_) => &self,
@@ -79,7 +79,7 @@ impl DocsetBuilder {
         }
     }
 
-    pub fn create_plist<'a>(&self) -> &Self {
+    fn create_plist<'a>(&self) -> &Self {
         use std::io::Write;
         let mut index_path = self.source.clone();
         index_path.push(&format!("{}/index.html", self.name.to_lowercase()));
@@ -108,14 +108,14 @@ impl DocsetBuilder {
         &self
     }
 
-    pub fn touch_db(&self) -> Connection {
+    fn touch_db(&self) -> Connection {
         File::create(self.contents_path.as_path().join("Resources/docset.dsidx").as_path()).expect("Could not create path for docset index.");
         let conn = Connection::open(self.contents_path.as_path().join("Resources/docset.dsidx").as_path()).expect("Could not connect to docset index.");
         Self::setup_table(&conn);
         conn
     }
 
-    pub fn get_all(&self) -> Vec<String> {
+    fn get_all(&self) -> Vec<String> {
         use glob::glob;
         let mut result = Vec::new();
         let dir = self.source.as_path().parent().expect("Could not extract documentation.");
@@ -129,7 +129,7 @@ impl DocsetBuilder {
         result
     }
 
-    pub fn copy_all(&self) -> &Self {
+    fn copy_all(&self) -> &Self {
         use walkdir::WalkDir;
         let mut options = dir::CopyOptions::new();
         options.skip_exist = true;
@@ -140,7 +140,7 @@ impl DocsetBuilder {
         self
     }
 
-    pub fn determine_dir(is_input: bool) -> PathBuf {
+    fn determine_dir(is_input: bool) -> PathBuf {
         match Self::get_name() {
             Ok(package_name) => {
                 let package_name = package_name.replace("-", "_");
